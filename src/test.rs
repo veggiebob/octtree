@@ -4,16 +4,16 @@ use rand::Rng;
 use crate::*;
 
 
+// This is the obvious replacement for the oct-tree algorithm that uses a linear search
 fn find_closest_flat<'a, T: Debug>(query_point: &Pos3D, pts: &'a [(Pos3D, T)]) -> Option<(f64, &'a (Pos3D, T))> {
     if pts.is_empty() {
         None
     } else {
         let mut md = distance(pts[0].0.clone().into(), *query_point);
         let mut res = &pts[0];
-        for obj in pts[0..].iter() {
+        for obj in pts[1..].iter() {
             let p = &obj.0;
             let d = distance(p.clone().into(), *query_point);
-            // println!("'{:?}' at {}", obj.1, d);
             if d < md {
                 md = d;
                 res = obj;
@@ -23,28 +23,32 @@ fn find_closest_flat<'a, T: Debug>(query_point: &Pos3D, pts: &'a [(Pos3D, T)]) -
     }
 }
 
+fn find_within_flat<'a, T: Debug>(query_point: &Pos3D, radius: f64, pts: &'a [(Pos3D, T)]) -> Vec<&'a (Pos3D, T)> {
+    todo!()
+}
+
 fn random_point(rng: &mut ThreadRng) -> Pos3D {
     Pos3D(rng.random(), rng.random(), rng.random())
 }
 
-#[test]
-fn random_1() {
+fn random_test(num_points: usize, count_threshold: usize, samples: usize) {
     let mut rng = rand::rng();
-    let pts = (0..1000).map(|i| {
+    let pts = (0..num_points).map(|i| {
+        // each point has a unique value
         (random_point(&mut rng), i)
     });
     let bounds = Bounds3D {
-        x: Bounds(-1., 1.),
-        y: Bounds(-1., 1.),
-        z: Bounds(-1., 1.),
+        x: Bounds(0., 1.),
+        y: Bounds(0., 1.),
+        z: Bounds(0., 1.),
     };
 
     let pts_flat: Vec<_> = pts.collect();
 
-    let mut pts_tree = BoundedOctTree::new(bounds, 10);
+    let mut pts_tree = BoundedOctTree::new(bounds, count_threshold);
     pts_tree.insert_all(pts_flat.clone().into_iter());
 
-    for qp in (0..10).map(|_i| random_point(&mut rng)) {
+    for qp in (0..samples).map(|_i| random_point(&mut rng)) {
         let flat_result = find_closest_flat(&qp, &pts_flat);
         let tree_result = pts_tree.query_closest(&qp);
 
@@ -55,10 +59,10 @@ fn random_1() {
     }
 }
 
-#[test]
-fn performance_test() {
+fn stress_test(num_points: usize, count_threshold: usize, samples: usize) {
+    println!("Stress test with {num_points} points, {samples} samples; threshold={count_threshold}");
     let mut rng = rand::rng();
-    let pts = (0..100_000).map(|i| {
+    let pts = (0..num_points).map(|i| {
         (random_point(&mut rng), i)
     });
     let bounds = Bounds3D {
@@ -69,12 +73,12 @@ fn performance_test() {
 
     let pts_flat: Vec<_> = pts.collect();
 
-    let mut pts_tree = BoundedOctTree::new(bounds, 10);
+    let mut pts_tree = BoundedOctTree::new(bounds, count_threshold);
     pts_tree.insert_all(pts_flat.clone().into_iter());
 
     let mut flat_total = 0.0;
     let mut tree_total = 0.0;
-    for qp in (0..100).map(|_i| random_point(&mut rng)) {
+    for qp in (0..samples).map(|_i| random_point(&mut rng)) {
         let start_time = Instant::now();
         let flat_result = find_closest_flat(&qp, &pts_flat);
         let flat_elapsed = start_time.elapsed().as_secs_f64();
@@ -92,17 +96,13 @@ fn performance_test() {
 
     println!("Flat query total time: {flat_total}");
     println!("Tree query total time: {tree_total}");
+    println!("Overall speedup: {}", flat_total / tree_total);
 }
 
+// for debugging
 #[test]
 fn custom_1() {
     let pts = vec![
-        // (Pos3D(0.15886905260333573, 0.8467472622483724, 0.8397440739936589), 0),
-        // (Pos3D(0.5635149368930065, 0.2746667247072422, 0.5855090453819807), 1),
-        // (Pos3D(0.4007706479757266, 0.9789424299141594, 0.01950162341993178), 2)
-        // (Pos3D(1., 1., 0.), 0),
-        // (Pos3D(-1., -1., 0.), 1),
-        // (Pos3D(-1., 1., 0.), 2),
         (Pos3D(0., 1., 1.), 0),
         (Pos3D(0.5, 0., 0.5), 1),
         (Pos3D(0.5, 1., 0.), 2),
@@ -129,4 +129,23 @@ fn custom_1() {
         flat_result.map(|(_d, (_pos, i))| i),
         tree_result.map(|(_d, (_pos, i))| i),
     );
+}
+
+#[test]
+fn random_tests() {
+    random_test(10, 1, 100);
+    random_test(10, 10, 100);
+    random_test(100, 1, 100);
+    random_test(100, 10, 100);
+}
+
+#[test]
+fn random_stress_tests() {
+    const SAMPLES: usize = 1_000;
+    const POINTS: usize = 100_000;
+    stress_test(POINTS, 1, SAMPLES);
+    stress_test(POINTS, 10, SAMPLES);
+    stress_test(POINTS, 20, SAMPLES);
+    stress_test(POINTS, 30, SAMPLES);
+    stress_test(POINTS, 40, SAMPLES);
 }

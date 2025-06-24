@@ -29,7 +29,6 @@ pub fn length(v: Pos3D) -> f64 {
     distance(v, Pos3D(0.0, 0.0, 0.0))
 }
 
-
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 pub enum Side {
     Pos,
@@ -65,9 +64,12 @@ pub struct BoundedOctTree<P, T> {
 impl<P, T> BoundedOctTree<P, T>
 where
     P: Clone + Into<Pos3D> + Debug,
-    T: Debug
+    T: Debug,
 {
     pub fn new(bounds: Bounds3D, count_threshold: usize) -> Self {
+        if count_threshold == 0 {
+            panic!("Cannot create an BoundedOctTree with a count threshold of 0")
+        }
         BoundedOctTree {
             bounds,
             count_threshold,
@@ -84,7 +86,10 @@ where
                 if let Some(bot) = map.get_mut(&side) {
                     bot.insert(position, object);
                 } else {
-                    let mut bot = BoundedOctTree::new(self.bounds.get_side_partition(side), self.count_threshold);
+                    let mut bot = BoundedOctTree::new(
+                        self.bounds.get_side_partition(side),
+                        self.count_threshold,
+                    );
                     bot.insert(position, object);
                     map.insert(side, bot);
                 }
@@ -100,7 +105,10 @@ where
                         if let Some(bot) = split_map.get_mut(&oct_side) {
                             bot.insert(p, t);
                         } else {
-                            let mut bot = BoundedOctTree::new(self.bounds.get_side_partition(oct_side), self.count_threshold);
+                            let mut bot = BoundedOctTree::new(
+                                self.bounds.get_side_partition(oct_side),
+                                self.count_threshold,
+                            );
                             bot.insert(p, t);
                             split_map.insert(oct_side, bot);
                         }
@@ -114,11 +122,12 @@ where
         self.tree_contents = TreeContents::Split(split_map);
     }
 
-    pub fn insert_all(&mut self, objs: impl Iterator<Item=(P, T)>) {
+    pub fn insert_all(&mut self, objs: impl Iterator<Item = (P, T)>) {
         for (position, obj) in objs {
             self.insert(position, obj);
         }
     }
+
     pub fn query_closest(&self, query_pos: &P) -> Option<(f64, &(P, T))> {
         let qpos = query_pos.clone().into();
         match &self.tree_contents {
@@ -154,7 +163,7 @@ where
                 }
                 match (min_dist, result) {
                     (Some(min_dist), Some(result)) => Some((min_dist, result)),
-                    _ => None
+                    _ => None,
                 }
             }
             TreeContents::Whole(objs) => {
@@ -208,11 +217,7 @@ where
 impl Bounds3D {
     pub fn get_oct_side(&self, p: Pos3D) -> OctSide {
         let Pos3D(x, y, z) = p;
-        (
-            self.x.get_side(x),
-            self.y.get_side(y),
-            self.z.get_side(z)
-        )
+        (self.x.get_side(x), self.y.get_side(y), self.z.get_side(z))
     }
     pub fn get_side_partition(&self, oct_side: OctSide) -> Bounds3D {
         let mid_x = self.x.mid();
@@ -249,11 +254,7 @@ impl Bounds3D {
 
 impl Bounds {
     pub fn get_side(&self, p: f64) -> Side {
-        if p > self.mid() {
-            Side::Pos
-        } else {
-            Side::Neg
-        }
+        if p > self.mid() { Side::Pos } else { Side::Neg }
     }
     pub fn mid(&self) -> f64 {
         (self.0 + self.1) / 2.
@@ -264,7 +265,6 @@ impl Bounds {
 }
 
 impl Side {
-
     fn choose<T>(&self, neg: T, pos: T) -> T {
         match &self {
             Side::Pos => pos,
